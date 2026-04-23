@@ -11,6 +11,13 @@ class BaseConfig:
     CELERY_RESULT_BACKEND: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
 
+    # Rate limiting
+    RATELIMIT_STORAGE_URI: str = os.environ.get("REDIS_URL", "memory://")
+    RATELIMIT_STRATEGY: str = "fixed-window"
+
+    # CORS
+    CORS_ORIGINS: str = os.environ.get("CORS_ORIGINS", "*")
+
 
 class DevelopmentConfig(BaseConfig):
     """Development configuration."""
@@ -27,6 +34,7 @@ class TestingConfig(BaseConfig):
     CELERY_BROKER_URL: str = "memory://"
     CELERY_RESULT_BACKEND: str = "cache+memory://"
     CELERY_TASK_ALWAYS_EAGER: bool = True
+    RATELIMIT_ENABLED: bool = False
 
 
 class ProductionConfig(BaseConfig):
@@ -38,3 +46,4 @@ class ProductionConfig(BaseConfig):
     REDIS_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     CELERY_BROKER_URL: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
     CELERY_RESULT_BACKEND: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+    RATELIMIT_STORAGE_URI: str = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
