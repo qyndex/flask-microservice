@@ -1,4 +1,7 @@
-"""Tests for health-check endpoints: liveness, readiness, and metrics."""
+"""Tests for health-check endpoints: liveness, readiness, and metrics.
+
+Health endpoints are public (no API key required).
+"""
 from unittest.mock import patch, MagicMock
 
 
@@ -20,15 +23,17 @@ class TestLiveness:
         assert "uptime_seconds" in data
         assert data["uptime_seconds"] >= 0
 
+    def test_no_auth_required(self, client):
+        """Health endpoints must be accessible without API key."""
+        resp = client.get("/health/")
+        assert resp.status_code == 200
+
 
 # ---------------------------------------------------------------------------
-# Readiness — both deps healthy
+# Readiness -- both deps healthy
 # ---------------------------------------------------------------------------
 
 class TestReadinessAllHealthy:
-    def _mock_redis_ping(self):
-        return MagicMock(return_value=True)
-
     def test_returns_200_when_all_ok(self, client):
         with patch("app.health.redis_client") as mock_redis:
             mock_redis.ping.return_value = True
@@ -63,7 +68,7 @@ class TestReadinessAllHealthy:
 
 
 # ---------------------------------------------------------------------------
-# Readiness — Redis down
+# Readiness -- Redis down
 # ---------------------------------------------------------------------------
 
 class TestReadinessRedisDegraded:
@@ -87,7 +92,7 @@ class TestReadinessRedisDegraded:
 
 
 # ---------------------------------------------------------------------------
-# Readiness — DB down
+# Readiness -- DB down
 # ---------------------------------------------------------------------------
 
 class TestReadinessDbDegraded:

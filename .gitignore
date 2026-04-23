@@ -15,5 +15,12 @@ venv/
 *.log
 .DS_Store
 .vscode/
+.idea/
 db.sqlite3
 *.db
+dev.db
+htmlcov/
+.coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

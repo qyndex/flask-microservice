@@ -1,5 +1,7 @@
 """Shared pytest fixtures for the Flask microservice test suite."""
 import json
+import os
+
 import pytest
 
 from app import create_app
@@ -12,7 +14,11 @@ def app():
 
     Uses an in-memory SQLite database so tests are fast and isolated, with
     Celery tasks running eagerly (synchronously) inside the test process.
+    Rate limiting is disabled.  API_KEYS is set so auth can be tested.
     """
+    # Set API_KEYS env var for auth tests
+    os.environ["API_KEYS"] = "test-key-001,test-key-002"
+
     flask_app = create_app("config.TestingConfig")
     flask_app.config.update(
         {
@@ -21,7 +27,6 @@ def app():
             "CELERY_TASK_ALWAYS_EAGER": True,
             "CELERY_BROKER_URL": "memory://",
             "CELERY_RESULT_BACKEND": "cache+memory://",
-            # Disable Flask-Redis actual connection during unit tests
             "REDIS_URL": "redis://localhost:6379/0",
         }
     )
@@ -58,6 +63,12 @@ def client(app, db):
 
 
 @pytest.fixture()
+def auth_headers():
+    """Return headers with a valid API key for authenticated requests."""
+    return {"X-API-Key": "test-key-001"}
+
+
+@pytest.fixture()
 def sample_job(db):
     """Persist a single Job row and return it for use in tests."""
     from app.models import Job
@@ -66,3 +77,20 @@ def sample_job(db):
     db.session.add(job)
     db.session.commit()
     return job
+
+
+@pytest.fixture()
+def sample_event(db):
+    """Persist a single Event row and return it for use in tests."""
+    from app.models import Event
+
+    event = Event(
+        event_type="test.event",
+        source="test-suite",
+        severity="info",
+        payload=json.dumps({"key": "value"}),
+        metadata_json=json.dumps({"test": True}),
+    )
+    db.session.add(event)
+    db.session.commit()
+    return event
