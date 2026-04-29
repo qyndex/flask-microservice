@@ -1,0 +1,76 @@
+name: Deploy to Coolify
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.repository }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Trigger Coolify deployment
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+        run: |
+          if [ -z "$COOLIFY_WEBHOOK" ]; then
+            echo "::error::COOLIFY_WEBHOOK secret not set"
+            exit 1
+          fi
+          RESPONSE=$(curl -sf --max-time 30 "$COOLIFY_WEBHOOK" 2>&1) || {
+            echo "::error::Coolify deploy trigger failed"
+            exit 1
+          }
+          echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+          echo "Deployment triggered successfully"
+
+      - name: Wait for deployment
+        env:
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+          COOLIFY_HOST: ${{ secrets.COOLIFY_HOST }}
+          APP_UUID: ${{ secrets.COOLIFY_APP_UUID }}
+        run: |
+          if [ -z "$COOLIFY_TOKEN" ] || [ -z "$APP_UUID" ]; then
+            echo "Skipping deployment wait (COOLIFY_TOKEN or APP_UUID not set)"
+            exit 0
+          fi
+          echo "Waiting for deployment to complete..."
+          for i in $(seq 1 30); do
+            STATUS=$(curl -sf -H "Authorization: Bearer $COOLIFY_TOKEN" \
+              "$COOLIFY_HOST/api/v1/applications/$APP_UUID" 2>/dev/null \
+              | jq -r '.status // "unknown"' 2>/dev/null)
+            echo "  [$i/30] Status: $STATUS"
+            if echo "$STATUS" | grep -q "running"; then
+              echo "Deployment is running!"
+              break
+            fi
+            if [ "$i" -eq 30 ]; then
+              echo "::warning::Deployment did not reach running state in 5 minutes"
+            fi
+            sleep 10
+          done
+
+      - name: Health check
+        env:
+          DEMO_URL: ${{ secrets.DEMO_URL }}
+        run: |
+          if [ -z "$DEMO_URL" ]; then
+            echo "Skipping health check (DEMO_URL not set)"
+            exit 0
+          fi
+          echo "Checking $DEMO_URL ..."
+          for i in $(seq 1 6); do
+            HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" "$DEMO_URL" --max-time 10 2>/dev/null || echo "000")
+            echo "  [$i/6] HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 400 ]; then
+              echo "Health check passed!"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::warning::Health check did not pass — app may still be starting"
