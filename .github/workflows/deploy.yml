@@ -23,20 +23,29 @@ jobs:
             echo "::error::COOLIFY_WEBHOOK secret not set"
             exit 1
           fi
-          HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
-            --max-time 30 \
-            -H "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$COOLIFY_WEBHOOK")
-          RESPONSE=$(cat /tmp/response.json)
-          echo "HTTP $HTTP_CODE"
-          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
-            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
-            echo "Deployment triggered successfully"
-          else
+          for attempt in $(seq 1 5); do
+            HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+              --max-time 30 \
+              -H "Authorization: Bearer $COOLIFY_TOKEN" \
+              "$COOLIFY_WEBHOOK")
+            RESPONSE=$(cat /tmp/response.json)
+            echo "[$attempt/5] HTTP $HTTP_CODE"
+            if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+              echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+              echo "Deployment triggered successfully"
+              exit 0
+            fi
+            if [ "$HTTP_CODE" = "429" ]; then
+              echo "Queue full — retrying in 30s..."
+              sleep 30
+              continue
+            fi
             echo "::error::Coolify deploy trigger failed (HTTP $HTTP_CODE)"
             echo "$RESPONSE"
             exit 1
-          fi
+          done
+          echo "::error::Coolify deploy queue remained full after 5 retries"
+          exit 1
 
       - name: Wait for deployment
         env:
