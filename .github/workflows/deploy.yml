@@ -23,14 +23,20 @@ jobs:
             echo "::error::COOLIFY_WEBHOOK secret not set"
             exit 1
           fi
-          RESPONSE=$(curl -sf --max-time 30 \
+          HTTP_CODE=$(curl -s -o /tmp/response.json -w "%{http_code}" \
+            --max-time 30 \
             -H "Authorization: Bearer $COOLIFY_TOKEN" \
-            "$COOLIFY_WEBHOOK" 2>&1) || {
-            echo "::error::Coolify deploy trigger failed"
+            "$COOLIFY_WEBHOOK")
+          RESPONSE=$(cat /tmp/response.json)
+          echo "HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
+            echo "Deployment triggered successfully"
+          else
+            echo "::error::Coolify deploy trigger failed (HTTP $HTTP_CODE)"
+            echo "$RESPONSE"
             exit 1
-          }
-          echo "$RESPONSE" | jq . 2>/dev/null || echo "$RESPONSE"
-          echo "Deployment triggered successfully"
+          fi
 
       - name: Wait for deployment
         env:
